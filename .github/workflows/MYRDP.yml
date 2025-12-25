@@ -1,41 +1,57 @@
-name: Windows Remote Desktop
+name: Windows Remote Desktop (Ngrok)
 
-on: workflow_dispatch
+on:
+  workflow_dispatch:
 
 jobs:
   setup-rdp:
-
     runs-on: windows-latest
 
     steps:
-    - name: 🔽 Unduh Ngrok & Modul RDP
+    - name: 🔽 Download Ngrok & RDP Tools
       run: |
         Invoke-WebRequest https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip -OutFile ngrok.zip
         Expand-Archive ngrok.zip -DestinationPath ngrok
         Invoke-WebRequest https://raw.githubusercontent.com/SahrulGunawan-ID/FREE-RDP/main/MODULE/START.bat -OutFile start.bat
-        Invoke-WebRequest https://raw.githubusercontent.com/SahrulGunawan-ID/FREE-RDP/main/MODULE/WALLPAPER.bat -OutFile wallpaper.bat
         Invoke-WebRequest https://raw.githubusercontent.com/SahrulGunawan-ID/FREE-RDP/main/MODULE/LOOP.bat -OutFile loop.bat
 
-    - name: 🔐 Autentikasi Ngrok
-      run: .\ngrok\ngrok.exe config add-authtoken $Env:NGROK_AUTH_TOKEN
+    - name: 🧪 Debug NGROK TOKEN
+      run: |
+        if ($Env:NGROK_AUTH_TOKEN -eq "") {
+          echo "❌ NGROK TOKEN NOT FOUND"
+          exit 1
+        } else {
+          echo "✅ NGROK TOKEN FOUND"
+        }
       env:
         NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
 
-    - name: 🔓 Aktifkan RDP & Firewall
+    - name: 🔐 Authenticate Ngrok
+      run: |
+        .\ngrok\ngrok.exe config add-authtoken $Env:NGROK_AUTH_TOKEN
+        .\ngrok\ngrok.exe config check
+      env:
+        NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
+
+    - name: 🔓 Enable RDP & Firewall
       run: |
         Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server" -Name "fDenyTSConnections" -Value 0
         Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
         Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" -Name "UserAuthentication" -Value 1
 
-    - name: 🖼️ Setel Wallpaper
-      run: copy wallpaper.bat $Env:RUNNER_TEMP\wallpaper.bat
-
-    - name: 🌐 Buka Tunnel Ngrok
+    - name: 👤 Set RDP User & Password
       run: |
-        Start-Process .\ngrok\ngrok.exe -ArgumentList "tcp --region ap 3389"
+        net user runneradmin P@ssw0rd123 /add
+        net localgroup administrators runneradmin /add
 
-    - name: ⚙️ Permintaan Resource
-      run: cmd /c start.bat
+    - name: ⚙️ Start RDP Service
+      run: |
+        Start-Service TermService
 
-    - name: ✅ RDP Aktif & Looping
+    - name: 🌐 Start Ngrok Tunnel (KEEP ALIVE)
+      run: |
+        cd ngrok
+        .\ngrok.exe tcp --region ap 3389
+
+    - name: 🔁 Keep Runner Alive
       run: cmd /c loop.bat
