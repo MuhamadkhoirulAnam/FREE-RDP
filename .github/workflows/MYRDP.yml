@@ -1,27 +1,26 @@
-name: Windows Remote Desktop (Ngrok)
+name: Windows RDP via Ngrok (Stable)
 
 on:
   workflow_dispatch:
 
 jobs:
-  setup-rdp:
+  rdp:
     runs-on: windows-latest
+    timeout-minutes: 360
 
     steps:
-    - name: 🔽 Download Ngrok & RDP Tools
+    - name: 🔽 Download Ngrok
       run: |
         Invoke-WebRequest https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip -OutFile ngrok.zip
         Expand-Archive ngrok.zip -DestinationPath ngrok
-        Invoke-WebRequest https://raw.githubusercontent.com/SahrulGunawan-ID/FREE-RDP/main/MODULE/START.bat -OutFile start.bat
-        Invoke-WebRequest https://raw.githubusercontent.com/SahrulGunawan-ID/FREE-RDP/main/MODULE/LOOP.bat -OutFile loop.bat
 
-    - name: 🧪 Debug NGROK TOKEN
+    - name: 🧪 Check NGROK TOKEN
       run: |
         if ($Env:NGROK_AUTH_TOKEN -eq "") {
-          echo "❌ NGROK TOKEN NOT FOUND"
+          Write-Host "❌ NGROK_AUTH_TOKEN NOT FOUND"
           exit 1
         } else {
-          echo "✅ NGROK TOKEN FOUND"
+          Write-Host "✅ NGROK_AUTH_TOKEN FOUND"
         }
       env:
         NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
@@ -35,23 +34,27 @@ jobs:
 
     - name: 🔓 Enable RDP & Firewall
       run: |
-        Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server" -Name "fDenyTSConnections" -Value 0
+        Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server" `
+          -Name "fDenyTSConnections" -Value 0
         Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-        Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" -Name "UserAuthentication" -Value 1
+        Set-ItemProperty -Path `
+          "HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" `
+          -Name "UserAuthentication" -Value 1
 
-    - name: 👤 Set RDP User & Password
+    - name: 👤 Create RDP User
       run: |
-        net user runneradmin P@ssw0rd123 /add
-        net localgroup administrators runneradmin /add
+        net user rdpuser Rdp@12345 /add
+        net localgroup administrators rdpuser /add
 
-    - name: ⚙️ Start RDP Service
+    - name: ▶️ Start RDP Service
       run: |
         Start-Service TermService
+        sc query TermService
 
-    - name: 🌐 Start Ngrok Tunnel (KEEP ALIVE)
+    - name: 🌐 Start Ngrok Tunnel (DO NOT CLOSE)
       run: |
         cd ngrok
+        Write-Host "======================================="
+        Write-Host " RDP STARTED - WAIT FOR NGROK ADDRESS"
+        Write-Host "======================================="
         .\ngrok.exe tcp --region ap 3389
-
-    - name: 🔁 Keep Runner Alive
-      run: cmd /c loop.bat
